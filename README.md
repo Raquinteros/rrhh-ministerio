@@ -1,4 +1,3 @@
-@"
 # Sistema de Gestión Integral para RRHH - AP2
 
 Alumno: Rodrigo A. Quinteros  
