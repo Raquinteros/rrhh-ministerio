@@ -1,0 +1,22 @@
+@"
+# Java / NetBeans
+build/
+dist/
+nbproject/private/
+*.class
+
+# Archivos temporales
+*.tmp
+*.bak
+*.log
+~$*.docx
+
+# Sistema operativo
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# IDEs
+.vscode/
+.idea/
+"@ | Out-File -Encoding UTF8 .gitignore
