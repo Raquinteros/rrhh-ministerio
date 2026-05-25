@@ -10,6 +10,12 @@ import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 
+/**
+ * Ventana principal del sistema.
+ *
+ * Presenta el menú de navegación del prototipo y permite acceder
+ * a los módulos implementados o previstos dentro del alcance del sistema.
+ */
 public class MenuPrincipalView extends JFrame {
 
     private String usuarioActual;
@@ -62,12 +68,26 @@ public class MenuPrincipalView extends JFrame {
 
         add(panelPrincipal);
 
+        /*
+         * Navegación hacia los módulos funcionales del prototipo.
+         * Se oculta el menú principal y se pasa su referencia para permitir el retorno.
+         */
         btnAgentes.addActionListener(e -> {
             AgenteView agenteView = new AgenteView(this);
             agenteView.setVisible(true);
             setVisible(false);
         });
 
+        btnLicencias.addActionListener(e -> {
+            LicenciaView licenciaView = new LicenciaView(this);
+            licenciaView.setVisible(true);
+            setVisible(false);
+        });
+
+        /*
+         * Opciones visibles en el menú, pero reservadas para futuras iteraciones.
+         * Se mantienen para representar el alcance general del sistema declarado.
+         */
         btnLegajos.addActionListener(e -> {
             JOptionPane.showMessageDialog(
                     this,
@@ -75,12 +95,6 @@ public class MenuPrincipalView extends JFrame {
                     "Gestión de Legajos",
                     JOptionPane.INFORMATION_MESSAGE
             );
-        });
-
-        btnLicencias.addActionListener(e -> {
-            LicenciaView licenciaView = new LicenciaView(this);
-            licenciaView.setVisible(true);
-            setVisible(false);
         });
 
         btnInformes.addActionListener(e -> {
@@ -96,7 +110,7 @@ public class MenuPrincipalView extends JFrame {
             JOptionPane.showMessageDialog(
                     this,
                     "Sistema de Gestión Integral para RRHH\n"
-                    + "Prototipo AP2\n"
+                    + "Prototipo Java Swing con conexión a MariaDB\n"
                     + "Módulos incluidos: Agentes, Legajos y Licencias.",
                     "Acerca del sistema",
                     JOptionPane.INFORMATION_MESSAGE

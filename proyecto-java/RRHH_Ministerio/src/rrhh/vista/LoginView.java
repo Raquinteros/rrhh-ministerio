@@ -13,7 +13,13 @@ import javax.swing.JPanel;
 import javax.swing.JPasswordField;
 import javax.swing.JTextField;
 import javax.swing.SwingConstants;
+import rrhh.datos.RepositorioMemoria;
 
+/**
+ * Ventana de inicio de sesión.
+ *
+ * Esta pantalla valida el usuario contra la tabla usuarios de MariaDB.
+ */
 public class LoginView extends JFrame {
 
     private JTextField txtUsuario;
@@ -21,11 +27,17 @@ public class LoginView extends JFrame {
     private JButton btnIngresar;
     private JButton btnSalir;
 
+    /**
+     * Constructor de la ventana de login.
+     */
     public LoginView() {
         configurarVentana();
         inicializarComponentes();
     }
 
+    /**
+     * Configura las propiedades generales de la ventana.
+     */
     private void configurarVentana() {
         setTitle("Sistema de Gestión Integral para RRHH - Inicio de sesión");
         setSize(460, 280);
@@ -34,6 +46,9 @@ public class LoginView extends JFrame {
         setResizable(false);
     }
 
+    /**
+     * Inicializa los componentes gráficos de la pantalla.
+     */
     private void inicializarComponentes() {
         JPanel panelPrincipal = new JPanel(new BorderLayout(10, 10));
         panelPrincipal.setBorder(BorderFactory.createEmptyBorder(20, 25, 20, 25));
@@ -83,11 +98,17 @@ public class LoginView extends JFrame {
         btnSalir.addActionListener(e -> System.exit(0));
     }
 
+    /**
+     * Valida el usuario ingresado contra la tabla usuarios.
+     *
+     * De esta manera el login deja de estar fijo en el código y pasa a usar
+     * los usuarios definidos en la base de datos del proyecto.
+     */
     private void ingresar() {
         String usuario = txtUsuario.getText().trim();
         String clave = new String(txtClave.getPassword()).trim();
 
-        if (usuario.equals("admin") && clave.equals("admin123")) {
+        if (RepositorioMemoria.validarUsuario(usuario, clave)) {
             MenuPrincipalView menu = new MenuPrincipalView(usuario);
             menu.setVisible(true);
             dispose();

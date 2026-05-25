@@ -16,6 +16,11 @@ import javax.swing.table.DefaultTableModel;
 import rrhh.datos.RepositorioMemoria;
 import rrhh.modelo.Agente;
 
+/**
+ * Ventana de gestión de agentes.
+ *
+ * Permite registrar agentes y consultar los agentes persistidos en MariaDB.
+ */
 public class AgenteView extends JFrame {
 
     private MenuPrincipalView menuPrincipal;
@@ -31,6 +36,11 @@ public class AgenteView extends JFrame {
     private JTable tablaAgentes;
     private DefaultTableModel modeloTabla;
 
+    /**
+     * Constructor de la pantalla de gestión de agentes.
+     *
+     * @param menuPrincipal referencia al menú principal para poder volver.
+     */
     public AgenteView(MenuPrincipalView menuPrincipal) {
         this.menuPrincipal = menuPrincipal;
 
@@ -39,6 +49,9 @@ public class AgenteView extends JFrame {
         cargarTablaAgentes();
     }
 
+    /**
+     * Configura la ventana.
+     */
     private void configurarVentana() {
         setTitle("Gestión de Agentes");
         setSize(850, 520);
@@ -47,6 +60,9 @@ public class AgenteView extends JFrame {
         setResizable(false);
     }
 
+    /**
+     * Inicializa formulario, botones y tabla.
+     */
     private void inicializarComponentes() {
         JPanel panelPrincipal = new JPanel(new BorderLayout(10, 10));
         panelPrincipal.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
@@ -81,10 +97,12 @@ public class AgenteView extends JFrame {
 
         JButton btnGuardar = new JButton("Guardar agente");
         JButton btnLimpiar = new JButton("Limpiar");
+        JButton btnOrdenar = new JButton("Listar ordenado");
         JButton btnVolver = new JButton("Volver");
 
         panelBotones.add(btnGuardar);
         panelBotones.add(btnLimpiar);
+        panelBotones.add(btnOrdenar);
         panelBotones.add(btnVolver);
 
         modeloTabla = new DefaultTableModel();
@@ -108,9 +126,13 @@ public class AgenteView extends JFrame {
 
         btnGuardar.addActionListener(e -> guardarAgente());
         btnLimpiar.addActionListener(e -> limpiarFormulario());
+        btnOrdenar.addActionListener(e -> cargarTablaAgentesOrdenados());
         btnVolver.addActionListener(e -> volverAlMenu());
     }
 
+    /**
+     * Valida los datos del formulario y registra el agente en MariaDB.
+     */
     private void guardarAgente() {
         String dni = txtDni.getText().trim();
         String cuil = txtCuil.getText().trim();
@@ -151,7 +173,18 @@ public class AgenteView extends JFrame {
         }
 
         Agente agente = new Agente(dni, cuil, apellido, nombre, cargo, reparticion, activo);
-        RepositorioMemoria.agregarAgente(agente);
+
+        boolean guardado = RepositorioMemoria.agregarAgente(agente);
+
+        if (!guardado) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "No se pudo registrar el agente. Verifique que el CUIL no esté duplicado.",
+                    "Error al guardar",
+                    JOptionPane.ERROR_MESSAGE
+            );
+            return;
+        }
 
         cargarTablaAgentes();
 
@@ -165,6 +198,9 @@ public class AgenteView extends JFrame {
         limpiarFormulario();
     }
 
+    /**
+     * Carga la tabla con los agentes registrados en MariaDB.
+     */
     private void cargarTablaAgentes() {
         modeloTabla.setRowCount(0);
 
@@ -181,6 +217,28 @@ public class AgenteView extends JFrame {
         }
     }
 
+    /**
+     * Carga la tabla con agentes ordenados por apellido y nombre.
+     */
+    private void cargarTablaAgentesOrdenados() {
+        modeloTabla.setRowCount(0);
+
+        for (Agente agente : RepositorioMemoria.obtenerAgentesOrdenadosPorApellido()) {
+            modeloTabla.addRow(new Object[]{
+                agente.getDni(),
+                agente.getCuil(),
+                agente.getApellido(),
+                agente.getNombre(),
+                agente.getCargo(),
+                agente.getReparticion(),
+                agente.isActivo() ? "Sí" : "No"
+            });
+        }
+    }
+
+    /**
+     * Limpia los campos del formulario.
+     */
     private void limpiarFormulario() {
         txtDni.setText("");
         txtCuil.setText("");
@@ -191,6 +249,9 @@ public class AgenteView extends JFrame {
         chkActivo.setSelected(true);
     }
 
+    /**
+     * Vuelve al menú principal.
+     */
     private void volverAlMenu() {
         menuPrincipal.setVisible(true);
         dispose();

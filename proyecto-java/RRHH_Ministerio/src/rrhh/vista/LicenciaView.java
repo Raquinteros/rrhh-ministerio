@@ -5,6 +5,7 @@ import java.awt.GridLayout;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.util.List;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
@@ -19,6 +20,15 @@ import javax.swing.table.DefaultTableModel;
 import rrhh.datos.RepositorioMemoria;
 import rrhh.modelo.Agente;
 
+/**
+ * Ventana de gestión de licencias.
+ *
+ * Permite buscar un agente por DNI y registrar licencias en MariaDB,
+ * respetando la estructura aprobada:
+ *
+ * licencias.id_agente
+ * licencias.id_tipo_licencia
+ */
 public class LicenciaView extends JFrame {
 
     private MenuPrincipalView menuPrincipal;
@@ -35,14 +45,23 @@ public class LicenciaView extends JFrame {
 
     private DateTimeFormatter formatter;
 
+    /**
+     * Constructor de la pantalla de licencias.
+     *
+     * @param menuPrincipal referencia al menú principal para poder volver.
+     */
     public LicenciaView(MenuPrincipalView menuPrincipal) {
         this.menuPrincipal = menuPrincipal;
         this.formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
         configurarVentana();
         inicializarComponentes();
+        cargarLicencias();
     }
 
+    /**
+     * Configura la ventana.
+     */
     private void configurarVentana() {
         setTitle("Gestión de Licencias");
         setSize(980, 560);
@@ -51,6 +70,9 @@ public class LicenciaView extends JFrame {
         setResizable(false);
     }
 
+    /**
+     * Inicializa formulario, botones y tabla.
+     */
     private void inicializarComponentes() {
         JPanel panelPrincipal = new JPanel(new BorderLayout(10, 10));
         panelPrincipal.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
@@ -62,12 +84,8 @@ public class LicenciaView extends JFrame {
         txtApellidoNombre = new JTextField();
         txtApellidoNombre.setEditable(false);
 
-        cmbTipoLicencia = new JComboBox<>(new String[]{
-            "Licencia Anual Reglamentaria",
-            "Licencia por Enfermedad",
-            "Licencia por Estudio",
-            "Licencia por Razones Particulares"
-        });
+        cmbTipoLicencia = new JComboBox<>();
+        cargarTiposLicencia();
 
         txtFechaInicio = new JTextField();
         txtFechaFin = new JTextField();
@@ -134,6 +152,34 @@ public class LicenciaView extends JFrame {
         btnVolver.addActionListener(e -> volverAlMenu());
     }
 
+    /**
+     * Carga los tipos de licencia desde la tabla tipos_licencia.
+     */
+    private void cargarTiposLicencia() {
+        List<String> tipos = RepositorioMemoria.obtenerTiposLicencia();
+
+        cmbTipoLicencia.removeAllItems();
+
+        for (String tipo : tipos) {
+            cmbTipoLicencia.addItem(tipo);
+        }
+
+        /*
+         * Respaldo defensivo.
+         * Si por algún motivo la tabla tipos_licencia no devolviera datos,
+         * se cargan los tipos previstos en el SQL aprobado.
+         */
+        if (cmbTipoLicencia.getItemCount() == 0) {
+            cmbTipoLicencia.addItem("Licencia Anual Reglamentaria");
+            cmbTipoLicencia.addItem("Licencia por Enfermedad");
+            cmbTipoLicencia.addItem("Licencia por Estudio");
+            cmbTipoLicencia.addItem("Licencia por Razones Particulares");
+        }
+    }
+
+    /**
+     * Busca un agente por DNI y muestra apellido y nombre.
+     */
     private void buscarAgente() {
         String dni = txtDniAgente.getText().trim();
 
@@ -173,6 +219,13 @@ public class LicenciaView extends JFrame {
         txtApellidoNombre.setText(agente.getApellido() + ", " + agente.getNombre());
     }
 
+    /**
+     * Registra una licencia en MariaDB.
+     *
+     * La pantalla trabaja con DNI y nombre de tipo de licencia,
+     * pero el repositorio convierte esos datos a id_agente e id_tipo_licencia
+     * para respetar las claves foráneas definidas en la base.
+     */
     private void registrarLicencia() {
         String dni = txtDniAgente.getText().trim();
         String tipoLicencia = cmbTipoLicencia.getSelectedItem().toString();
@@ -263,17 +316,26 @@ public class LicenciaView extends JFrame {
 
         long dias = java.time.temporal.ChronoUnit.DAYS.between(fechaInicio, fechaFin) + 1;
 
-        modeloTabla.addRow(new Object[]{
-            agente.getDni(),
-            agente.getApellido(),
-            agente.getNombre(),
-            tipoLicencia,
-            fechaInicioTexto,
-            fechaFinTexto,
-            dias,
-            "Registrada",
-            observaciones
-        });
+        boolean guardado = RepositorioMemoria.registrarLicencia(
+                dni,
+                tipoLicencia,
+                fechaInicio,
+                fechaFin,
+                (int) dias,
+                observaciones
+        );
+
+        if (!guardado) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "No se pudo registrar la licencia en la base de datos.",
+                    "Error al guardar",
+                    JOptionPane.ERROR_MESSAGE
+            );
+            return;
+        }
+
+        cargarLicencias();
 
         JOptionPane.showMessageDialog(
                 this,
@@ -286,6 +348,20 @@ public class LicenciaView extends JFrame {
         limpiarFormulario();
     }
 
+    /**
+     * Carga en la tabla las licencias registradas en MariaDB.
+     */
+    private void cargarLicencias() {
+        modeloTabla.setRowCount(0);
+
+        for (Object[] fila : RepositorioMemoria.obtenerLicenciasParaTabla()) {
+            modeloTabla.addRow(fila);
+        }
+    }
+
+    /**
+     * Limpia los campos del formulario.
+     */
     private void limpiarFormulario() {
         txtDniAgente.setText("");
         txtApellidoNombre.setText("");
@@ -295,6 +371,9 @@ public class LicenciaView extends JFrame {
         txtObservaciones.setText("");
     }
 
+    /**
+     * Vuelve al menú principal.
+     */
     private void volverAlMenu() {
         menuPrincipal.setVisible(true);
         dispose();
