@@ -1,0 +1,1692 @@
+﻿================ ESTRUCTURA DEL PROYECTO ================
+Listado de rutas de carpetas para el volumen Google Drive
+El n·mero de serie del volumen es 1983-1116
+G:\MI UNIDAD\COSAS RODRIGO\FACULTAD RODRIGO\SIGLO XXI\INF275 - SEMINARIO PRACTICA INFORMATICA\OFICINA DE PERSONAL\RRHHH\PROYECTO-JAVA\RRHH_MINISTERIO\SRC
++---rrhh
+    ª   Main.java
+    ª   
+    +---datos
+    ª       RepositorioMemoria.java
+    ª       ConexionBD.java
+    ª       
+    +---modelo
+    ª       Agente.java
+    ª       Persona.java
+    ª       
+    +---vista
+            LicenciaView.java
+            LoginView.java
+            AgenteView.java
+            MenuPrincipalView.java
+            
+
+================ CODIGO FUENTE ================
+
+
+############################################################
+# ARCHIVO: G:\Mi unidad\Cosas Rodrigo\Facultad Rodrigo\Siglo XXI\INF275 - Seminario Practica Informatica\Oficina de Personal\rrhhh\proyecto-java\RRHH_Ministerio\src\rrhh\datos\ConexionBD.java
+############################################################
+
+package rrhh.datos;
+
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.SQLException;
+
+/**
+ * Clase responsable de administrar la conexiÃ³n con la base de datos MariaDB.
+ *
+ * Esta clase centraliza la configuraciÃ³n de conexiÃ³n para que el resto del
+ * sistema no repita la URL, el usuario ni la clave de acceso.
+ *
+ * Base utilizada:
+ * - Motor: MariaDB / MySQL
+ * - Base de datos: rrhh_ministerio
+ * - Host: localhost
+ * - Puerto: 3306
+ *
+ * La estructura de tablas utilizada corresponde al archivo SQL ya definido
+ * para el proyecto:
+ *
+ * Z:\Desarrollo\database\rrhh_ministerio.sql
+ */
+public class ConexionBD {
+
+    private static final String URL = "jdbc:mariadb://localhost:3306/rrhh_ministerio";
+    private static final String USUARIO = "root";
+    private static final String CLAVE = "";
+
+    /**
+     * Constructor privado.
+     *
+     * La clase solo expone mÃ©todos estÃ¡ticos y no necesita ser instanciada.
+     */
+    private ConexionBD() {
+    }
+
+    /**
+     * Obtiene una conexiÃ³n activa contra MariaDB.
+     *
+     * @return conexiÃ³n JDBC hacia la base rrhh_ministerio.
+     * @throws SQLException si ocurre un error de conexiÃ³n.
+     */
+    public static Connection obtenerConexion() throws SQLException {
+        return DriverManager.getConnection(URL, USUARIO, CLAVE);
+    }
+
+    /**
+     * Verifica si la conexiÃ³n con la base de datos se puede establecer.
+     *
+     * Este mÃ©todo se usa al iniciar el sistema para evitar abrir la interfaz
+     * si MariaDB no estÃ¡ disponible.
+     *
+     * @return true si la conexiÃ³n es correcta; false si ocurre un error.
+     */
+    public static boolean probarConexion() {
+        try (Connection conexion = obtenerConexion()) {
+            return conexion != null && !conexion.isClosed();
+        } catch (SQLException e) {
+            System.err.println("Error al conectar con MariaDB: " + e.getMessage());
+            return false;
+        }
+    }
+}
+
+############################################################
+# ARCHIVO: G:\Mi unidad\Cosas Rodrigo\Facultad Rodrigo\Siglo XXI\INF275 - Seminario Practica Informatica\Oficina de Personal\rrhhh\proyecto-java\RRHH_Ministerio\src\rrhh\datos\RepositorioMemoria.java
+############################################################
+
+package rrhh.datos;
+
+import java.sql.Connection;
+import java.sql.Date;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
+import rrhh.modelo.Agente;
+
+/**
+ * Repositorio de datos del sistema.
+ *
+ * El nombre RepositorioMemoria se conserva para respetar la estructura ya usada
+ * en el prototipo y evitar modificar innecesariamente las pantallas.
+ *
+ * A partir de esta versiÃ³n, la clase ya no guarda datos en memoria mediante
+ * ArrayList, sino que trabaja contra MariaDB usando JDBC.
+ *
+ * Tablas usadas:
+ * - usuarios
+ * - agentes
+ * - tipos_licencia
+ * - licencias
+ */
+public class RepositorioMemoria {
+
+    /**
+     * Constructor privado.
+     *
+     * La clase se utiliza de manera estÃ¡tica desde las ventanas del sistema.
+     */
+    private RepositorioMemoria() {
+    }
+
+    /**
+     * Valida usuario y contraseÃ±a contra la tabla usuarios.
+     *
+     * Respeta los usuarios cargados en el archivo SQL:
+     * - admin / admin123
+     * - rrhh / rrhh123
+     *
+     * @param usuario usuario ingresado.
+     * @param clave clave ingresada.
+     * @return true si el usuario existe, estÃ¡ activo y la clave coincide.
+     */
+    public static boolean validarUsuario(String usuario, String clave) {
+        String sql = """
+                SELECT COUNT(*) AS total
+                FROM usuarios
+                WHERE usuario = ?
+                  AND clave = ?
+                  AND activo = TRUE
+                """;
+
+        try (Connection conexion = ConexionBD.obtenerConexion();
+             PreparedStatement ps = conexion.prepareStatement(sql)) {
+
+            ps.setString(1, usuario);
+            ps.setString(2, clave);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt("total") > 0;
+                }
+            }
+
+        } catch (SQLException e) {
+            System.err.println("Error al validar usuario: " + e.getMessage());
+        }
+
+        return false;
+    }
+
+    /**
+     * Agrega un agente en la tabla agentes.
+     *
+     * Se respetan las columnas reales de la base aprobada:
+     * dni, cuil, apellido, nombre, cargo, reparticion y activo.
+     *
+     * @param agente agente a registrar.
+     * @return true si se guardÃ³ correctamente; false si ocurriÃ³ un error.
+     */
+    public static boolean agregarAgente(Agente agente) {
+        String sql = """
+                INSERT INTO agentes (
+                    dni,
+                    cuil,
+                    apellido,
+                    nombre,
+                    cargo,
+                    reparticion,
+                    activo
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                """;
+
+        try (Connection conexion = ConexionBD.obtenerConexion();
+             PreparedStatement ps = conexion.prepareStatement(sql)) {
+
+            ps.setString(1, agente.getDni());
+            ps.setString(2, agente.getCuil());
+            ps.setString(3, agente.getApellido());
+            ps.setString(4, agente.getNombre());
+            ps.setString(5, agente.getCargo());
+            ps.setString(6, agente.getReparticion());
+            ps.setBoolean(7, agente.isActivo());
+
+            ps.executeUpdate();
+            return true;
+
+        } catch (SQLException e) {
+            System.err.println("Error al agregar agente: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Obtiene todos los agentes registrados en MariaDB.
+     *
+     * @return lista de agentes.
+     */
+    public static List<Agente> obtenerAgentes() {
+        List<Agente> agentes = new ArrayList<>();
+
+        String sql = """
+                SELECT
+                    id_agente,
+                    dni,
+                    cuil,
+                    apellido,
+                    nombre,
+                    cargo,
+                    reparticion,
+                    activo
+                FROM agentes
+                """;
+
+        try (Connection conexion = ConexionBD.obtenerConexion();
+             PreparedStatement ps = conexion.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+
+            while (rs.next()) {
+                agentes.add(mapearAgente(rs));
+            }
+
+        } catch (SQLException e) {
+            System.err.println("Error al obtener agentes: " + e.getMessage());
+        }
+
+        return agentes;
+    }
+
+    /**
+     * Obtiene los agentes ordenados por apellido y nombre.
+     *
+     * Este mÃ©todo permite demostrar el uso de ordenamiento dentro del prototipo.
+     *
+     * @return lista de agentes ordenada alfabÃ©ticamente.
+     */
+    public static List<Agente> obtenerAgentesOrdenadosPorApellido() {
+        List<Agente> agentes = new ArrayList<>();
+
+        String sql = """
+                SELECT
+                    id_agente,
+                    dni,
+                    cuil,
+                    apellido,
+                    nombre,
+                    cargo,
+                    reparticion,
+                    activo
+                FROM agentes
+                ORDER BY apellido ASC, nombre ASC
+                """;
+
+        try (Connection conexion = ConexionBD.obtenerConexion();
+             PreparedStatement ps = conexion.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+
+            while (rs.next()) {
+                agentes.add(mapearAgente(rs));
+            }
+
+        } catch (SQLException e) {
+            System.err.println("Error al obtener agentes ordenados: " + e.getMessage());
+        }
+
+        return agentes;
+    }
+
+    /**
+     * Busca un agente por DNI.
+     *
+     * @param dni DNI del agente.
+     * @return agente encontrado o null si no existe.
+     */
+    public static Agente buscarAgentePorDni(String dni) {
+        String sql = """
+                SELECT
+                    id_agente,
+                    dni,
+                    cuil,
+                    apellido,
+                    nombre,
+                    cargo,
+                    reparticion,
+                    activo
+                FROM agentes
+                WHERE dni = ?
+                """;
+
+        try (Connection conexion = ConexionBD.obtenerConexion();
+             PreparedStatement ps = conexion.prepareStatement(sql)) {
+
+            ps.setString(1, dni);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return mapearAgente(rs);
+                }
+            }
+
+        } catch (SQLException e) {
+            System.err.println("Error al buscar agente por DNI: " + e.getMessage());
+        }
+
+        return null;
+    }
+
+    /**
+     * Verifica si ya existe un DNI registrado.
+     *
+     * @param dni DNI a verificar.
+     * @return true si ya existe; false si no existe.
+     */
+    public static boolean existeDni(String dni) {
+        String sql = """
+                SELECT COUNT(*) AS total
+                FROM agentes
+                WHERE dni = ?
+                """;
+
+        try (Connection conexion = ConexionBD.obtenerConexion();
+             PreparedStatement ps = conexion.prepareStatement(sql)) {
+
+            ps.setString(1, dni);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt("total") > 0;
+                }
+            }
+
+        } catch (SQLException e) {
+            System.err.println("Error al verificar DNI: " + e.getMessage());
+        }
+
+        return false;
+    }
+
+    /**
+     * Obtiene el id_agente a partir del DNI.
+     *
+     * Es necesario porque la tabla licencias no guarda el DNI directamente,
+     * sino el campo id_agente como clave forÃ¡nea.
+     *
+     * @param dni DNI del agente.
+     * @return id_agente o -1 si no existe.
+     */
+    private static int obtenerIdAgentePorDni(String dni) {
+        String sql = """
+                SELECT id_agente
+                FROM agentes
+                WHERE dni = ?
+                """;
+
+        try (Connection conexion = ConexionBD.obtenerConexion();
+             PreparedStatement ps = conexion.prepareStatement(sql)) {
+
+            ps.setString(1, dni);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt("id_agente");
+                }
+            }
+
+        } catch (SQLException e) {
+            System.err.println("Error al obtener id_agente: " + e.getMessage());
+        }
+
+        return -1;
+    }
+
+    /**
+     * Obtiene el id_tipo_licencia a partir del nombre del tipo de licencia.
+     *
+     * Es necesario porque la tabla licencias guarda id_tipo_licencia y no el
+     * texto del tipo de licencia.
+     *
+     * @param nombreTipo nombre del tipo de licencia.
+     * @return id_tipo_licencia o -1 si no existe.
+     */
+    private static int obtenerIdTipoLicenciaPorNombre(String nombreTipo) {
+        String sql = """
+                SELECT id_tipo_licencia
+                FROM tipos_licencia
+                WHERE nombre = ?
+                """;
+
+        try (Connection conexion = ConexionBD.obtenerConexion();
+             PreparedStatement ps = conexion.prepareStatement(sql)) {
+
+            ps.setString(1, nombreTipo);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt("id_tipo_licencia");
+                }
+            }
+
+        } catch (SQLException e) {
+            System.err.println("Error al obtener tipo de licencia: " + e.getMessage());
+        }
+
+        return -1;
+    }
+
+    /**
+     * Obtiene los tipos de licencia registrados en la tabla tipos_licencia.
+     *
+     * Esto permite que el combo de la pantalla de licencias use los datos reales
+     * de la base, en vez de depender solamente de valores escritos en el cÃ³digo.
+     *
+     * @return lista de nombres de tipos de licencia.
+     */
+    public static List<String> obtenerTiposLicencia() {
+        List<String> tipos = new ArrayList<>();
+
+        String sql = """
+                SELECT nombre
+                FROM tipos_licencia
+                ORDER BY id_tipo_licencia ASC
+                """;
+
+        try (Connection conexion = ConexionBD.obtenerConexion();
+             PreparedStatement ps = conexion.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+
+            while (rs.next()) {
+                tipos.add(rs.getString("nombre"));
+            }
+
+        } catch (SQLException e) {
+            System.err.println("Error al obtener tipos de licencia: " + e.getMessage());
+        }
+
+        return tipos;
+    }
+
+    /**
+     * Registra una licencia asociada a un agente existente.
+     *
+     * La base aprobada exige guardar:
+     * - id_agente
+     * - id_tipo_licencia
+     * - fecha_inicio
+     * - fecha_fin
+     * - dias_solicitados
+     * - estado
+     * - observaciones
+     *
+     * @param dni DNI del agente.
+     * @param tipoLicencia nombre del tipo de licencia.
+     * @param fechaInicio fecha inicial.
+     * @param fechaFin fecha final.
+     * @param diasSolicitados cantidad de dÃ­as solicitados.
+     * @param observaciones observaciones ingresadas por el usuario.
+     * @return true si se registrÃ³ correctamente; false si ocurriÃ³ un error.
+     */
+    public static boolean registrarLicencia(
+            String dni,
+            String tipoLicencia,
+            LocalDate fechaInicio,
+            LocalDate fechaFin,
+            int diasSolicitados,
+            String observaciones
+    ) {
+        int idAgente = obtenerIdAgentePorDni(dni);
+        int idTipoLicencia = obtenerIdTipoLicenciaPorNombre(tipoLicencia);
+
+        if (idAgente == -1 || idTipoLicencia == -1) {
+            return false;
+        }
+
+        String sql = """
+                INSERT INTO licencias (
+                    id_agente,
+                    id_tipo_licencia,
+                    fecha_inicio,
+                    fecha_fin,
+                    dias_solicitados,
+                    estado,
+                    observaciones
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                """;
+
+        try (Connection conexion = ConexionBD.obtenerConexion();
+             PreparedStatement ps = conexion.prepareStatement(sql)) {
+
+            ps.setInt(1, idAgente);
+            ps.setInt(2, idTipoLicencia);
+            ps.setDate(3, Date.valueOf(fechaInicio));
+            ps.setDate(4, Date.valueOf(fechaFin));
+            ps.setInt(5, diasSolicitados);
+            ps.setString(6, "Registrada");
+            ps.setString(7, observaciones);
+
+            ps.executeUpdate();
+            return true;
+
+        } catch (SQLException e) {
+            System.err.println("Error al registrar licencia: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Obtiene las licencias registradas usando JOIN contra agentes y tipos_licencia.
+     *
+     * Se devuelve una lista de filas preparada para cargar la JTable de LicenciaView.
+     *
+     * @return lista de filas con datos de licencias.
+     */
+    public static List<Object[]> obtenerLicenciasParaTabla() {
+        List<Object[]> licencias = new ArrayList<>();
+
+        String sql = """
+                SELECT
+                    l.id_licencia,
+                    a.dni,
+                    a.apellido,
+                    a.nombre,
+                    tl.nombre AS tipo_licencia,
+                    l.fecha_inicio,
+                    l.fecha_fin,
+                    l.dias_solicitados,
+                    l.estado,
+                    l.observaciones
+                FROM licencias l
+                INNER JOIN agentes a
+                    ON l.id_agente = a.id_agente
+                INNER JOIN tipos_licencia tl
+                    ON l.id_tipo_licencia = tl.id_tipo_licencia
+                ORDER BY l.id_licencia DESC
+                """;
+
+        try (Connection conexion = ConexionBD.obtenerConexion();
+             PreparedStatement ps = conexion.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+
+            while (rs.next()) {
+                licencias.add(new Object[]{
+                    rs.getString("dni"),
+                    rs.getString("apellido"),
+                    rs.getString("nombre"),
+                    rs.getString("tipo_licencia"),
+                    rs.getDate("fecha_inicio").toString(),
+                    rs.getDate("fecha_fin").toString(),
+                    rs.getInt("dias_solicitados"),
+                    rs.getString("estado"),
+                    rs.getString("observaciones")
+                });
+            }
+
+        } catch (SQLException e) {
+            System.err.println("Error al obtener licencias: " + e.getMessage());
+        }
+
+        return licencias;
+    }
+
+    /**
+     * Convierte una fila SQL de la tabla agentes en un objeto Agente.
+     *
+     * @param rs fila actual del ResultSet.
+     * @return objeto Agente.
+     * @throws SQLException si ocurre un error leyendo los campos.
+     */
+    private static Agente mapearAgente(ResultSet rs) throws SQLException {
+        return new Agente(
+                rs.getString("dni"),
+                rs.getString("cuil"),
+                rs.getString("apellido"),
+                rs.getString("nombre"),
+                rs.getString("cargo"),
+                rs.getString("reparticion"),
+                rs.getBoolean("activo")
+        );
+    }
+}
+
+############################################################
+# ARCHIVO: G:\Mi unidad\Cosas Rodrigo\Facultad Rodrigo\Siglo XXI\INF275 - Seminario Practica Informatica\Oficina de Personal\rrhhh\proyecto-java\RRHH_Ministerio\src\rrhh\Main.java
+############################################################
+
+package rrhh;
+
+import javax.swing.JOptionPane;
+import javax.swing.SwingUtilities;
+import rrhh.datos.ConexionBD;
+import rrhh.vista.LoginView;
+
+/**
+ * Clase principal del sistema.
+ *
+ * Responsabilidades:
+ * - Verificar la conexiÃ³n con MariaDB.
+ * - Iniciar la interfaz grÃ¡fica.
+ * - Abrir la ventana de inicio de sesiÃ³n.
+ */
+public class Main {
+
+    /**
+     * Punto de entrada del programa.
+     *
+     * @param args argumentos recibidos por consola.
+     */
+    public static void main(String[] args) {
+
+        /*
+         * Antes de abrir el sistema se prueba la conexiÃ³n con MariaDB.
+         * Si la base no estÃ¡ disponible, se informa al usuario y no se continÃºa.
+         */
+        if (!ConexionBD.probarConexion()) {
+            JOptionPane.showMessageDialog(
+                    null,
+                    "No se pudo conectar con la base de datos MariaDB.\n"
+                    + "Verifique que XAMPP/MySQL estÃ© iniciado y que exista la base rrhh_ministerio.",
+                    "Error de conexiÃ³n",
+                    JOptionPane.ERROR_MESSAGE
+            );
+            return;
+        }
+
+        /*
+         * La interfaz grÃ¡fica de Swing debe iniciarse en el hilo de eventos.
+         */
+        SwingUtilities.invokeLater(() -> {
+            LoginView login = new LoginView();
+            login.setVisible(true);
+        });
+    }
+}
+
+############################################################
+# ARCHIVO: G:\Mi unidad\Cosas Rodrigo\Facultad Rodrigo\Siglo XXI\INF275 - Seminario Practica Informatica\Oficina de Personal\rrhhh\proyecto-java\RRHH_Ministerio\src\rrhh\modelo\Agente.java
+############################################################
+
+package rrhh.modelo;
+
+/**
+ * Clase que representa a un agente o empleado gestionado por el sistema.
+ * 
+ * Hereda de Persona los datos comunes: DNI, CUIL, apellido y nombre.
+ * Mantiene como atributos propios los datos laborales del agente.
+ */
+public class Agente extends Persona {
+
+    private String cargo;
+    private String reparticion;
+    private boolean activo;
+
+    public Agente(String dni, String cuil, String apellido, String nombre, String cargo, String reparticion, boolean activo) {
+        super(dni, cuil, apellido, nombre);
+        this.cargo = cargo;
+        this.reparticion = reparticion;
+        this.activo = activo;
+    }
+
+    public String getCargo() {
+        return cargo;
+    }
+
+    public void setCargo(String cargo) {
+        this.cargo = cargo;
+    }
+
+    public String getReparticion() {
+        return reparticion;
+    }
+
+    public void setReparticion(String reparticion) {
+        this.reparticion = reparticion;
+    }
+
+    public boolean isActivo() {
+        return activo;
+    }
+
+    public void setActivo(boolean activo) {
+        this.activo = activo;
+    }
+
+    @Override
+    public String mostrarDatos() {
+        return getApellido() + ", " + getNombre()
+                + " | DNI: " + getDni()
+                + " | CUIL: " + getCuil()
+                + " | Cargo: " + cargo
+                + " | ReparticiÃ³n: " + reparticion
+                + " | Estado: " + (activo ? "Activo" : "Inactivo");
+    }
+
+    @Override
+    public String toString() {
+        return mostrarDatos();
+    }
+}
+
+############################################################
+# ARCHIVO: G:\Mi unidad\Cosas Rodrigo\Facultad Rodrigo\Siglo XXI\INF275 - Seminario Practica Informatica\Oficina de Personal\rrhhh\proyecto-java\RRHH_Ministerio\src\rrhh\modelo\Persona.java
+############################################################
+
+package rrhh.modelo;
+
+/**
+ * Clase abstracta que representa una persona dentro del sistema.
+ * 
+ * Se utiliza como clase base para concentrar atributos comunes como DNI,
+ * CUIL, apellido y nombre. Permite aplicar herencia y abstracciÃ³n dentro
+ * del prototipo.
+ */
+public abstract class Persona {
+
+    private String dni;
+    private String cuil;
+    private String apellido;
+    private String nombre;
+
+    public Persona(String dni, String cuil, String apellido, String nombre) {
+        this.dni = dni;
+        this.cuil = cuil;
+        this.apellido = apellido;
+        this.nombre = nombre;
+    }
+
+    public String getDni() {
+        return dni;
+    }
+
+    public void setDni(String dni) {
+        this.dni = dni;
+    }
+
+    public String getCuil() {
+        return cuil;
+    }
+
+    public void setCuil(String cuil) {
+        this.cuil = cuil;
+    }
+
+    public String getApellido() {
+        return apellido;
+    }
+
+    public void setApellido(String apellido) {
+        this.apellido = apellido;
+    }
+
+    public String getNombre() {
+        return nombre;
+    }
+
+    public void setNombre(String nombre) {
+        this.nombre = nombre;
+    }
+
+    /**
+     * MÃ©todo abstracto que obliga a las clases hijas a definir
+     * cÃ³mo se muestran sus datos principales.
+     */
+    public abstract String mostrarDatos();
+}
+
+############################################################
+# ARCHIVO: G:\Mi unidad\Cosas Rodrigo\Facultad Rodrigo\Siglo XXI\INF275 - Seminario Practica Informatica\Oficina de Personal\rrhhh\proyecto-java\RRHH_Ministerio\src\rrhh\vista\AgenteView.java
+############################################################
+
+package rrhh.vista;
+
+import java.awt.BorderLayout;
+import java.awt.GridLayout;
+import javax.swing.BorderFactory;
+import javax.swing.JButton;
+import javax.swing.JCheckBox;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
+import javax.swing.JOptionPane;
+import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.JTable;
+import javax.swing.JTextField;
+import javax.swing.table.DefaultTableModel;
+import rrhh.datos.RepositorioMemoria;
+import rrhh.modelo.Agente;
+
+/**
+ * Ventana de gestiÃ³n de agentes.
+ *
+ * Permite registrar agentes y consultar los agentes persistidos en MariaDB.
+ */
+public class AgenteView extends JFrame {
+
+    private MenuPrincipalView menuPrincipal;
+
+    private JTextField txtDni;
+    private JTextField txtCuil;
+    private JTextField txtApellido;
+    private JTextField txtNombre;
+    private JTextField txtCargo;
+    private JTextField txtReparticion;
+    private JCheckBox chkActivo;
+
+    private JTable tablaAgentes;
+    private DefaultTableModel modeloTabla;
+
+    /**
+     * Constructor de la pantalla de gestiÃ³n de agentes.
+     *
+     * @param menuPrincipal referencia al menÃº principal para poder volver.
+     */
+    public AgenteView(MenuPrincipalView menuPrincipal) {
+        this.menuPrincipal = menuPrincipal;
+
+        configurarVentana();
+        inicializarComponentes();
+        cargarTablaAgentes();
+    }
+
+    /**
+     * Configura la ventana.
+     */
+    private void configurarVentana() {
+        setTitle("GestiÃ³n de Agentes");
+        setSize(850, 520);
+        setLocationRelativeTo(null);
+        setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
+        setResizable(false);
+    }
+
+    /**
+     * Inicializa formulario, botones y tabla.
+     */
+    private void inicializarComponentes() {
+        JPanel panelPrincipal = new JPanel(new BorderLayout(10, 10));
+        panelPrincipal.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
+
+        JPanel panelFormulario = new JPanel(new GridLayout(7, 2, 8, 8));
+        panelFormulario.setBorder(BorderFactory.createTitledBorder("Datos del agente"));
+
+        txtDni = new JTextField();
+        txtCuil = new JTextField();
+        txtApellido = new JTextField();
+        txtNombre = new JTextField();
+        txtCargo = new JTextField();
+        txtReparticion = new JTextField();
+        chkActivo = new JCheckBox("Activo", true);
+
+        panelFormulario.add(new JLabel("DNI:"));
+        panelFormulario.add(txtDni);
+        panelFormulario.add(new JLabel("CUIL:"));
+        panelFormulario.add(txtCuil);
+        panelFormulario.add(new JLabel("Apellido:"));
+        panelFormulario.add(txtApellido);
+        panelFormulario.add(new JLabel("Nombre:"));
+        panelFormulario.add(txtNombre);
+        panelFormulario.add(new JLabel("Cargo:"));
+        panelFormulario.add(txtCargo);
+        panelFormulario.add(new JLabel("ReparticiÃ³n:"));
+        panelFormulario.add(txtReparticion);
+        panelFormulario.add(new JLabel("Estado:"));
+        panelFormulario.add(chkActivo);
+
+        JPanel panelBotones = new JPanel();
+
+        JButton btnGuardar = new JButton("Guardar agente");
+        JButton btnLimpiar = new JButton("Limpiar");
+        JButton btnOrdenar = new JButton("Listar ordenado");
+        JButton btnVolver = new JButton("Volver");
+
+        panelBotones.add(btnGuardar);
+        panelBotones.add(btnLimpiar);
+        panelBotones.add(btnOrdenar);
+        panelBotones.add(btnVolver);
+
+        modeloTabla = new DefaultTableModel();
+        modeloTabla.addColumn("DNI");
+        modeloTabla.addColumn("CUIL");
+        modeloTabla.addColumn("Apellido");
+        modeloTabla.addColumn("Nombre");
+        modeloTabla.addColumn("Cargo");
+        modeloTabla.addColumn("ReparticiÃ³n");
+        modeloTabla.addColumn("Activo");
+
+        tablaAgentes = new JTable(modeloTabla);
+        JScrollPane scrollTabla = new JScrollPane(tablaAgentes);
+        scrollTabla.setBorder(BorderFactory.createTitledBorder("Agentes registrados"));
+
+        panelPrincipal.add(panelFormulario, BorderLayout.NORTH);
+        panelPrincipal.add(scrollTabla, BorderLayout.CENTER);
+        panelPrincipal.add(panelBotones, BorderLayout.SOUTH);
+
+        add(panelPrincipal);
+
+        btnGuardar.addActionListener(e -> guardarAgente());
+        btnLimpiar.addActionListener(e -> limpiarFormulario());
+        btnOrdenar.addActionListener(e -> cargarTablaAgentesOrdenados());
+        btnVolver.addActionListener(e -> volverAlMenu());
+    }
+
+    /**
+     * Valida los datos del formulario y registra el agente en MariaDB.
+     */
+    private void guardarAgente() {
+        String dni = txtDni.getText().trim();
+        String cuil = txtCuil.getText().trim();
+        String apellido = txtApellido.getText().trim();
+        String nombre = txtNombre.getText().trim();
+        String cargo = txtCargo.getText().trim();
+        String reparticion = txtReparticion.getText().trim();
+        boolean activo = chkActivo.isSelected();
+
+        if (dni.isEmpty() || cuil.isEmpty() || apellido.isEmpty() || nombre.isEmpty()) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Debe completar DNI, CUIL, apellido y nombre.",
+                    "Datos incompletos",
+                    JOptionPane.WARNING_MESSAGE
+            );
+            return;
+        }
+
+        if (!dni.matches("\\d{8}")) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "El DNI debe contener 8 dÃ­gitos numÃ©ricos.",
+                    "DNI invÃ¡lido",
+                    JOptionPane.WARNING_MESSAGE
+            );
+            return;
+        }
+
+        if (RepositorioMemoria.existeDni(dni)) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Ya existe un agente registrado con ese DNI.",
+                    "Registro duplicado",
+                    JOptionPane.WARNING_MESSAGE
+            );
+            return;
+        }
+
+        Agente agente = new Agente(dni, cuil, apellido, nombre, cargo, reparticion, activo);
+
+        boolean guardado = RepositorioMemoria.agregarAgente(agente);
+
+        if (!guardado) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "No se pudo registrar el agente. Verifique que el CUIL no estÃ© duplicado.",
+                    "Error al guardar",
+                    JOptionPane.ERROR_MESSAGE
+            );
+            return;
+        }
+
+        cargarTablaAgentes();
+
+        JOptionPane.showMessageDialog(
+                this,
+                "Agente registrado correctamente.",
+                "OperaciÃ³n exitosa",
+                JOptionPane.INFORMATION_MESSAGE
+        );
+
+        limpiarFormulario();
+    }
+
+    /**
+     * Carga la tabla con los agentes registrados en MariaDB.
+     */
+    private void cargarTablaAgentes() {
+        modeloTabla.setRowCount(0);
+
+        for (Agente agente : RepositorioMemoria.obtenerAgentes()) {
+            modeloTabla.addRow(new Object[]{
+                agente.getDni(),
+                agente.getCuil(),
+                agente.getApellido(),
+                agente.getNombre(),
+                agente.getCargo(),
+                agente.getReparticion(),
+                agente.isActivo() ? "SÃ­" : "No"
+            });
+        }
+    }
+
+    /**
+     * Carga la tabla con agentes ordenados por apellido y nombre.
+     */
+    private void cargarTablaAgentesOrdenados() {
+        modeloTabla.setRowCount(0);
+
+        for (Agente agente : RepositorioMemoria.obtenerAgentesOrdenadosPorApellido()) {
+            modeloTabla.addRow(new Object[]{
+                agente.getDni(),
+                agente.getCuil(),
+                agente.getApellido(),
+                agente.getNombre(),
+                agente.getCargo(),
+                agente.getReparticion(),
+                agente.isActivo() ? "SÃ­" : "No"
+            });
+        }
+    }
+
+    /**
+     * Limpia los campos del formulario.
+     */
+    private void limpiarFormulario() {
+        txtDni.setText("");
+        txtCuil.setText("");
+        txtApellido.setText("");
+        txtNombre.setText("");
+        txtCargo.setText("");
+        txtReparticion.setText("");
+        chkActivo.setSelected(true);
+    }
+
+    /**
+     * Vuelve al menÃº principal.
+     */
+    private void volverAlMenu() {
+        menuPrincipal.setVisible(true);
+        dispose();
+    }
+}
+
+############################################################
+# ARCHIVO: G:\Mi unidad\Cosas Rodrigo\Facultad Rodrigo\Siglo XXI\INF275 - Seminario Practica Informatica\Oficina de Personal\rrhhh\proyecto-java\RRHH_Ministerio\src\rrhh\vista\LicenciaView.java
+############################################################
+
+package rrhh.vista;
+
+import java.awt.BorderLayout;
+import java.awt.GridLayout;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.util.List;
+import javax.swing.BorderFactory;
+import javax.swing.JButton;
+import javax.swing.JComboBox;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
+import javax.swing.JOptionPane;
+import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.JTable;
+import javax.swing.JTextField;
+import javax.swing.table.DefaultTableModel;
+import rrhh.datos.RepositorioMemoria;
+import rrhh.modelo.Agente;
+
+/**
+ * Ventana de gestiÃ³n de licencias.
+ *
+ * Permite buscar un agente por DNI y registrar licencias en MariaDB,
+ * respetando la estructura aprobada:
+ *
+ * licencias.id_agente
+ * licencias.id_tipo_licencia
+ */
+public class LicenciaView extends JFrame {
+
+    private MenuPrincipalView menuPrincipal;
+
+    private JTextField txtDniAgente;
+    private JTextField txtApellidoNombre;
+    private JComboBox<String> cmbTipoLicencia;
+    private JTextField txtFechaInicio;
+    private JTextField txtFechaFin;
+    private JTextField txtObservaciones;
+
+    private JTable tablaLicencias;
+    private DefaultTableModel modeloTabla;
+
+    private DateTimeFormatter formatter;
+
+    /**
+     * Constructor de la pantalla de licencias.
+     *
+     * @param menuPrincipal referencia al menÃº principal para poder volver.
+     */
+    public LicenciaView(MenuPrincipalView menuPrincipal) {
+        this.menuPrincipal = menuPrincipal;
+        this.formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+
+        configurarVentana();
+        inicializarComponentes();
+        cargarLicencias();
+    }
+
+    /**
+     * Configura la ventana.
+     */
+    private void configurarVentana() {
+        setTitle("GestiÃ³n de Licencias");
+        setSize(980, 560);
+        setLocationRelativeTo(null);
+        setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
+        setResizable(false);
+    }
+
+    /**
+     * Inicializa formulario, botones y tabla.
+     */
+    private void inicializarComponentes() {
+        JPanel panelPrincipal = new JPanel(new BorderLayout(10, 10));
+        panelPrincipal.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
+
+        JPanel panelFormulario = new JPanel(new GridLayout(6, 2, 8, 8));
+        panelFormulario.setBorder(BorderFactory.createTitledBorder("Datos de la licencia"));
+
+        txtDniAgente = new JTextField();
+        txtApellidoNombre = new JTextField();
+        txtApellidoNombre.setEditable(false);
+
+        cmbTipoLicencia = new JComboBox<>();
+        cargarTiposLicencia();
+
+        txtFechaInicio = new JTextField();
+        txtFechaFin = new JTextField();
+        txtObservaciones = new JTextField();
+
+        JButton btnBuscarAgente = new JButton("Buscar agente");
+
+        JPanel panelBusqueda = new JPanel(new BorderLayout(5, 5));
+        panelBusqueda.add(txtDniAgente, BorderLayout.CENTER);
+        panelBusqueda.add(btnBuscarAgente, BorderLayout.EAST);
+
+        panelFormulario.add(new JLabel("DNI del agente:"));
+        panelFormulario.add(panelBusqueda);
+
+        panelFormulario.add(new JLabel("Agente encontrado:"));
+        panelFormulario.add(txtApellidoNombre);
+
+        panelFormulario.add(new JLabel("Tipo de licencia:"));
+        panelFormulario.add(cmbTipoLicencia);
+
+        panelFormulario.add(new JLabel("Fecha inicio (dd/MM/yyyy):"));
+        panelFormulario.add(txtFechaInicio);
+
+        panelFormulario.add(new JLabel("Fecha fin (dd/MM/yyyy):"));
+        panelFormulario.add(txtFechaFin);
+
+        panelFormulario.add(new JLabel("Observaciones:"));
+        panelFormulario.add(txtObservaciones);
+
+        JPanel panelBotones = new JPanel();
+
+        JButton btnRegistrar = new JButton("Registrar licencia");
+        JButton btnLimpiar = new JButton("Limpiar");
+        JButton btnVolver = new JButton("Volver");
+
+        panelBotones.add(btnRegistrar);
+        panelBotones.add(btnLimpiar);
+        panelBotones.add(btnVolver);
+
+        modeloTabla = new DefaultTableModel();
+        modeloTabla.addColumn("DNI");
+        modeloTabla.addColumn("Apellido");
+        modeloTabla.addColumn("Nombre");
+        modeloTabla.addColumn("Tipo");
+        modeloTabla.addColumn("Inicio");
+        modeloTabla.addColumn("Fin");
+        modeloTabla.addColumn("DÃ­as");
+        modeloTabla.addColumn("Estado");
+        modeloTabla.addColumn("Observaciones");
+
+        tablaLicencias = new JTable(modeloTabla);
+        JScrollPane scrollTabla = new JScrollPane(tablaLicencias);
+        scrollTabla.setBorder(BorderFactory.createTitledBorder("Licencias registradas"));
+
+        panelPrincipal.add(panelFormulario, BorderLayout.NORTH);
+        panelPrincipal.add(scrollTabla, BorderLayout.CENTER);
+        panelPrincipal.add(panelBotones, BorderLayout.SOUTH);
+
+        add(panelPrincipal);
+
+        btnBuscarAgente.addActionListener(e -> buscarAgente());
+        btnRegistrar.addActionListener(e -> registrarLicencia());
+        btnLimpiar.addActionListener(e -> limpiarFormulario());
+        btnVolver.addActionListener(e -> volverAlMenu());
+    }
+
+    /**
+     * Carga los tipos de licencia desde la tabla tipos_licencia.
+     */
+    private void cargarTiposLicencia() {
+        List<String> tipos = RepositorioMemoria.obtenerTiposLicencia();
+
+        cmbTipoLicencia.removeAllItems();
+
+        for (String tipo : tipos) {
+            cmbTipoLicencia.addItem(tipo);
+        }
+
+        /*
+         * Respaldo defensivo.
+         * Si por algÃºn motivo la tabla tipos_licencia no devolviera datos,
+         * se cargan los tipos previstos en el SQL aprobado.
+         */
+        if (cmbTipoLicencia.getItemCount() == 0) {
+            cmbTipoLicencia.addItem("Licencia Anual Reglamentaria");
+            cmbTipoLicencia.addItem("Licencia por Enfermedad");
+            cmbTipoLicencia.addItem("Licencia por Estudio");
+            cmbTipoLicencia.addItem("Licencia por Razones Particulares");
+        }
+    }
+
+    /**
+     * Busca un agente por DNI y muestra apellido y nombre.
+     */
+    private void buscarAgente() {
+        String dni = txtDniAgente.getText().trim();
+
+        if (dni.isEmpty()) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Debe ingresar el DNI del agente.",
+                    "Dato obligatorio",
+                    JOptionPane.WARNING_MESSAGE
+            );
+            return;
+        }
+
+        if (!dni.matches("\\d{8}")) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "El DNI debe contener 8 dÃ­gitos numÃ©ricos.",
+                    "DNI invÃ¡lido",
+                    JOptionPane.WARNING_MESSAGE
+            );
+            return;
+        }
+
+        Agente agente = RepositorioMemoria.buscarAgentePorDni(dni);
+
+        if (agente == null) {
+            txtApellidoNombre.setText("");
+            JOptionPane.showMessageDialog(
+                    this,
+                    "No se encontrÃ³ el agente solicitado.",
+                    "Agente inexistente",
+                    JOptionPane.WARNING_MESSAGE
+            );
+            return;
+        }
+
+        txtApellidoNombre.setText(agente.getApellido() + ", " + agente.getNombre());
+    }
+
+    /**
+     * Registra una licencia en MariaDB.
+     *
+     * La pantalla trabaja con DNI y nombre de tipo de licencia,
+     * pero el repositorio convierte esos datos a id_agente e id_tipo_licencia
+     * para respetar las claves forÃ¡neas definidas en la base.
+     */
+    private void registrarLicencia() {
+        String dni = txtDniAgente.getText().trim();
+        String tipoLicencia = cmbTipoLicencia.getSelectedItem().toString();
+        String fechaInicioTexto = txtFechaInicio.getText().trim();
+        String fechaFinTexto = txtFechaFin.getText().trim();
+        String observaciones = txtObservaciones.getText().trim();
+
+        if (dni.isEmpty()) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Debe ingresar el DNI del agente.",
+                    "Dato obligatorio",
+                    JOptionPane.WARNING_MESSAGE
+            );
+            return;
+        }
+
+        if (!dni.matches("\\d{8}")) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "El DNI debe contener 8 dÃ­gitos numÃ©ricos.",
+                    "DNI invÃ¡lido",
+                    JOptionPane.WARNING_MESSAGE
+            );
+            return;
+        }
+
+        Agente agente = RepositorioMemoria.buscarAgentePorDni(dni);
+
+        if (agente == null) {
+            txtApellidoNombre.setText("");
+            JOptionPane.showMessageDialog(
+                    this,
+                    "No se encontrÃ³ el agente solicitado. No se puede registrar una licencia sin agente asociado.",
+                    "Agente inexistente",
+                    JOptionPane.WARNING_MESSAGE
+            );
+            return;
+        }
+
+        txtApellidoNombre.setText(agente.getApellido() + ", " + agente.getNombre());
+
+        if (fechaInicioTexto.isEmpty()) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Debe ingresar fecha de inicio.",
+                    "Dato obligatorio",
+                    JOptionPane.WARNING_MESSAGE
+            );
+            return;
+        }
+
+        if (fechaFinTexto.isEmpty()) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Debe ingresar fecha de finalizaciÃ³n.",
+                    "Dato obligatorio",
+                    JOptionPane.WARNING_MESSAGE
+            );
+            return;
+        }
+
+        LocalDate fechaInicio;
+        LocalDate fechaFin;
+
+        try {
+            fechaInicio = LocalDate.parse(fechaInicioTexto, formatter);
+            fechaFin = LocalDate.parse(fechaFinTexto, formatter);
+        } catch (DateTimeParseException ex) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Las fechas deben tener el formato dd/MM/yyyy.",
+                    "Formato de fecha invÃ¡lido",
+                    JOptionPane.WARNING_MESSAGE
+            );
+            return;
+        }
+
+        if (fechaFin.isBefore(fechaInicio)) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "La fecha de finalizaciÃ³n no puede ser anterior a la fecha de inicio.",
+                    "Fechas invÃ¡lidas",
+                    JOptionPane.WARNING_MESSAGE
+            );
+            return;
+        }
+
+        long dias = java.time.temporal.ChronoUnit.DAYS.between(fechaInicio, fechaFin) + 1;
+
+        boolean guardado = RepositorioMemoria.registrarLicencia(
+                dni,
+                tipoLicencia,
+                fechaInicio,
+                fechaFin,
+                (int) dias,
+                observaciones
+        );
+
+        if (!guardado) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "No se pudo registrar la licencia en la base de datos.",
+                    "Error al guardar",
+                    JOptionPane.ERROR_MESSAGE
+            );
+            return;
+        }
+
+        cargarLicencias();
+
+        JOptionPane.showMessageDialog(
+                this,
+                "Licencia registrada correctamente para el agente "
+                + agente.getApellido() + ", " + agente.getNombre() + ".",
+                "OperaciÃ³n exitosa",
+                JOptionPane.INFORMATION_MESSAGE
+        );
+
+        limpiarFormulario();
+    }
+
+    /**
+     * Carga en la tabla las licencias registradas en MariaDB.
+     */
+    private void cargarLicencias() {
+        modeloTabla.setRowCount(0);
+
+        for (Object[] fila : RepositorioMemoria.obtenerLicenciasParaTabla()) {
+            modeloTabla.addRow(fila);
+        }
+    }
+
+    /**
+     * Limpia los campos del formulario.
+     */
+    private void limpiarFormulario() {
+        txtDniAgente.setText("");
+        txtApellidoNombre.setText("");
+        cmbTipoLicencia.setSelectedIndex(0);
+        txtFechaInicio.setText("");
+        txtFechaFin.setText("");
+        txtObservaciones.setText("");
+    }
+
+    /**
+     * Vuelve al menÃº principal.
+     */
+    private void volverAlMenu() {
+        menuPrincipal.setVisible(true);
+        dispose();
+    }
+}
+
+############################################################
+# ARCHIVO: G:\Mi unidad\Cosas Rodrigo\Facultad Rodrigo\Siglo XXI\INF275 - Seminario Practica Informatica\Oficina de Personal\rrhhh\proyecto-java\RRHH_Ministerio\src\rrhh\vista\LoginView.java
+############################################################
+
+package rrhh.vista;
+
+import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.Font;
+import java.awt.GridLayout;
+import javax.swing.BorderFactory;
+import javax.swing.JButton;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
+import javax.swing.JOptionPane;
+import javax.swing.JPanel;
+import javax.swing.JPasswordField;
+import javax.swing.JTextField;
+import javax.swing.SwingConstants;
+import rrhh.datos.RepositorioMemoria;
+
+/**
+ * Ventana de inicio de sesiÃ³n.
+ *
+ * Esta pantalla valida el usuario contra la tabla usuarios de MariaDB.
+ */
+public class LoginView extends JFrame {
+
+    private JTextField txtUsuario;
+    private JPasswordField txtClave;
+    private JButton btnIngresar;
+    private JButton btnSalir;
+
+    /**
+     * Constructor de la ventana de login.
+     */
+    public LoginView() {
+        configurarVentana();
+        inicializarComponentes();
+    }
+
+    /**
+     * Configura las propiedades generales de la ventana.
+     */
+    private void configurarVentana() {
+        setTitle("Sistema de GestiÃ³n Integral para RRHH - Inicio de sesiÃ³n");
+        setSize(460, 280);
+        setLocationRelativeTo(null);
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setResizable(false);
+    }
+
+    /**
+     * Inicializa los componentes grÃ¡ficos de la pantalla.
+     */
+    private void inicializarComponentes() {
+        JPanel panelPrincipal = new JPanel(new BorderLayout(10, 10));
+        panelPrincipal.setBorder(BorderFactory.createEmptyBorder(20, 25, 20, 25));
+
+        JLabel lblTitulo = new JLabel("Sistema de GestiÃ³n Integral para RRHH");
+        lblTitulo.setFont(new Font("Arial", Font.BOLD, 18));
+        lblTitulo.setHorizontalAlignment(SwingConstants.CENTER);
+
+        JLabel lblSubtitulo = new JLabel("Ministerio de Gobierno, Infraestructura y Desarrollo Territorial");
+        lblSubtitulo.setFont(new Font("Arial", Font.PLAIN, 12));
+        lblSubtitulo.setHorizontalAlignment(SwingConstants.CENTER);
+        lblSubtitulo.setForeground(Color.DARK_GRAY);
+
+        JPanel panelTitulo = new JPanel(new GridLayout(2, 1));
+        panelTitulo.add(lblTitulo);
+        panelTitulo.add(lblSubtitulo);
+
+        JPanel panelFormulario = new JPanel(new GridLayout(2, 2, 10, 10));
+        panelFormulario.setBorder(BorderFactory.createEmptyBorder(20, 0, 20, 0));
+
+        JLabel lblUsuario = new JLabel("Usuario:");
+        JLabel lblClave = new JLabel("ContraseÃ±a:");
+
+        txtUsuario = new JTextField();
+        txtClave = new JPasswordField();
+
+        panelFormulario.add(lblUsuario);
+        panelFormulario.add(txtUsuario);
+        panelFormulario.add(lblClave);
+        panelFormulario.add(txtClave);
+
+        JPanel panelBotones = new JPanel();
+
+        btnIngresar = new JButton("Ingresar");
+        btnSalir = new JButton("Salir");
+
+        panelBotones.add(btnIngresar);
+        panelBotones.add(btnSalir);
+
+        panelPrincipal.add(panelTitulo, BorderLayout.NORTH);
+        panelPrincipal.add(panelFormulario, BorderLayout.CENTER);
+        panelPrincipal.add(panelBotones, BorderLayout.SOUTH);
+
+        add(panelPrincipal);
+
+        btnIngresar.addActionListener(e -> ingresar());
+        btnSalir.addActionListener(e -> System.exit(0));
+    }
+
+    /**
+     * Valida el usuario ingresado contra la tabla usuarios.
+     *
+     * De esta manera el login deja de estar fijo en el cÃ³digo y pasa a usar
+     * los usuarios definidos en la base de datos del proyecto.
+     */
+    private void ingresar() {
+        String usuario = txtUsuario.getText().trim();
+        String clave = new String(txtClave.getPassword()).trim();
+
+        if (RepositorioMemoria.validarUsuario(usuario, clave)) {
+            MenuPrincipalView menu = new MenuPrincipalView(usuario);
+            menu.setVisible(true);
+            dispose();
+        } else {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Usuario o contraseÃ±a incorrectos.",
+                    "Acceso denegado",
+                    JOptionPane.ERROR_MESSAGE
+            );
+        }
+    }
+}
+
+############################################################
+# ARCHIVO: G:\Mi unidad\Cosas Rodrigo\Facultad Rodrigo\Siglo XXI\INF275 - Seminario Practica Informatica\Oficina de Personal\rrhhh\proyecto-java\RRHH_Ministerio\src\rrhh\vista\MenuPrincipalView.java
+############################################################
+
+package rrhh.vista;
+
+import java.awt.BorderLayout;
+import java.awt.Font;
+import java.awt.GridLayout;
+import javax.swing.BorderFactory;
+import javax.swing.JButton;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
+import javax.swing.JOptionPane;
+import javax.swing.JPanel;
+
+/**
+ * Ventana principal del sistema.
+ *
+ * Presenta el menÃº de navegaciÃ³n del prototipo y permite acceder
+ * a los mÃ³dulos implementados o previstos dentro del alcance del sistema.
+ */
+public class MenuPrincipalView extends JFrame {
+
+    private String usuarioActual;
+
+    public MenuPrincipalView(String usuarioActual) {
+        this.usuarioActual = usuarioActual;
+        configurarVentana();
+        inicializarComponentes();
+    }
+
+    private void configurarVentana() {
+        setTitle("Sistema de GestiÃ³n Integral para RRHH - MenÃº principal");
+        setSize(620, 420);
+        setLocationRelativeTo(null);
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setResizable(false);
+    }
+
+    private void inicializarComponentes() {
+        JPanel panelPrincipal = new JPanel(new BorderLayout(15, 15));
+        panelPrincipal.setBorder(BorderFactory.createEmptyBorder(20, 25, 20, 25));
+
+        JLabel lblTitulo = new JLabel("MenÃº principal");
+        lblTitulo.setFont(new Font("Arial", Font.BOLD, 22));
+
+        JLabel lblUsuario = new JLabel("Usuario activo: " + usuarioActual);
+
+        JPanel panelSuperior = new JPanel(new GridLayout(2, 1));
+        panelSuperior.add(lblTitulo);
+        panelSuperior.add(lblUsuario);
+
+        JPanel panelBotones = new JPanel(new GridLayout(3, 2, 15, 15));
+
+        JButton btnAgentes = new JButton("GestiÃ³n de Agentes");
+        JButton btnLegajos = new JButton("GestiÃ³n de Legajos");
+        JButton btnLicencias = new JButton("GestiÃ³n de Licencias");
+        JButton btnInformes = new JButton("Informes");
+        JButton btnAcerca = new JButton("Acerca del sistema");
+        JButton btnSalir = new JButton("Salir");
+
+        panelBotones.add(btnAgentes);
+        panelBotones.add(btnLegajos);
+        panelBotones.add(btnLicencias);
+        panelBotones.add(btnInformes);
+        panelBotones.add(btnAcerca);
+        panelBotones.add(btnSalir);
+
+        panelPrincipal.add(panelSuperior, BorderLayout.NORTH);
+        panelPrincipal.add(panelBotones, BorderLayout.CENTER);
+
+        add(panelPrincipal);
+
+        /*
+         * NavegaciÃ³n hacia los mÃ³dulos funcionales del prototipo.
+         * Se oculta el menÃº principal y se pasa su referencia para permitir el retorno.
+         */
+        btnAgentes.addActionListener(e -> {
+            AgenteView agenteView = new AgenteView(this);
+            agenteView.setVisible(true);
+            setVisible(false);
+        });
+
+        btnLicencias.addActionListener(e -> {
+            LicenciaView licenciaView = new LicenciaView(this);
+            licenciaView.setVisible(true);
+            setVisible(false);
+        });
+
+        /*
+         * Opciones visibles en el menÃº, pero reservadas para futuras iteraciones.
+         * Se mantienen para representar el alcance general del sistema declarado.
+         */
+        btnLegajos.addActionListener(e -> {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "MÃ³dulo de legajos previsto para consulta del prototipo.",
+                    "GestiÃ³n de Legajos",
+                    JOptionPane.INFORMATION_MESSAGE
+            );
+        });
+
+        btnInformes.addActionListener(e -> {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "MÃ³dulo previsto para futuras iteraciones.",
+                    "Informes",
+                    JOptionPane.INFORMATION_MESSAGE
+            );
+        });
+
+        btnAcerca.addActionListener(e -> {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Sistema de GestiÃ³n Integral para RRHH\n"
+                    + "Prototipo Java Swing con conexiÃ³n a MariaDB\n"
+                    + "MÃ³dulos incluidos: Agentes, Legajos y Licencias.",
+                    "Acerca del sistema",
+                    JOptionPane.INFORMATION_MESSAGE
+            );
+        });
+
+        btnSalir.addActionListener(e -> System.exit(0));
+    }
+}
