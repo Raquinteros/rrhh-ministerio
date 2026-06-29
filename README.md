@@ -11,7 +11,7 @@
 
 Este repositorio contiene un prototipo académico desarrollado en **Java** para la gestión básica de información de recursos humanos en la Oficina de Personal del Ministerio de Gobierno, Infraestructura y Desarrollo Territorial del Gobierno de Mendoza.
 
-El proyecto forma parte de una entrega incremental de la materia **Seminario de Práctica de Informática**. La etapa actual corresponde a **AP3**, centrada en la implementación del prototipo en Java, con interfaz gráfica, clases del dominio, validaciones y evidencias de funcionamiento.
+El proyecto forma parte de una entrega incremental de la materia **Seminario de Práctica de Informática**. La etapa actual corresponde a **AP4**, centrada en la implementación del prototipo en Java, con interfaz gráfica, clases del dominio, validaciones y evidencias de funcionamiento.
 
 ---
 
@@ -24,7 +24,7 @@ El proyecto forma parte de una entrega incremental de la materia **Seminario de 
 | Universidad | Universidad Siglo 21                          |
 | Materia     | Seminario de Práctica de Informática - INF275 |
 | Proyecto    | Sistema de Gestión Integral para RRHH         |
-| Etapa       | AP3 - Desarrollo del prototipo Java           |
+| Etapa       | AP4 - Trabajo Práctico Completo           |
 
 ---
 
