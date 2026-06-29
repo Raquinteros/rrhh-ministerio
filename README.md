@@ -11,7 +11,7 @@
 
 Este repositorio contiene un prototipo académico desarrollado en **Java** para la gestión básica de información de recursos humanos en la Oficina de Personal del Ministerio de Gobierno, Infraestructura y Desarrollo Territorial del Gobierno de Mendoza.
 
-El proyecto forma parte de una entrega incremental de la materia **Seminario de Práctica de Informática**. La etapa actual corresponde a **AP4**, centrada en la implementación del prototipo en Java, con interfaz gráfica, clases del dominio, validaciones y evidencias de funcionamiento.
+El proyecto forma parte de una entrega incremental de la materia **Seminario de Práctica de Informática**. La etapa actual corresponde a **AP4**, se completa el trabajo práctico de manera integral
 
 ---
 
@@ -135,13 +135,13 @@ java -jar "proyecto-java\RRHH_Ministerio\dist\RRHH_Ministerio.jar"
 | ---------------- | ------------------------------------------------------------- |
 | `capturas/`      | Capturas del sistema funcionando y evidencias de compilación. |
 | `diagramas/`     | Diagramas utilizados para documentar el diseño del prototipo. |
-| `documentacion/` | PDF formal de la entrega AP3.                                 |
+| `documentacion/` | PDF formal de la entrega AP4.                                 |
 | `database/`      | Archivos relacionados con la base de datos.                   |
 
 Documento principal:
 
 ```text
-documentacion/QUINTEROS-RODRIGO-AP3.pdf
+documentacion/QUINTEROS-RODRIGO-AP4.pdf
 ```
 
 ---
@@ -149,10 +149,11 @@ documentacion/QUINTEROS-RODRIGO-AP3.pdf
 ## Estado actual
 
 ```text
-AP3 finalizado - Prototipo Java funcional
+AP4 finalizado - Trabajo Práctico Completo
 ```
 
 El repositorio incluye código fuente, ejecutable JAR, capturas, diagramas, documentación formal y archivos de apoyo para base de datos.
+Link para video de presentacion del proyecto:https://youtu.be/YYQ_ejXOsao
 
 ---
 
